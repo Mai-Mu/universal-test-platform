@@ -1,0 +1,24 @@
+{
+  "name": "universal-test-platform",
+  "version": "1.0.0",
+  "description": "Universal test case management platform with SQLite backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node scripts/smoke-test.mjs"
+  },
+  "keywords": [
+    "testing",
+    "test-cases",
+    "qa",
+    "test-management",
+    "sqlite"
+  ],
+  "author": "Antigravity",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "express": "^4.21.2",
+    "node-cron": "^4.6.0"
+  }
+}
