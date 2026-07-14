@@ -581,9 +581,37 @@ app.post('/api/modules/reorder', (req, res) => {
 
 // --- Backup & Restore System ---
 
-const BACKUP_DIR = path.join(__dirname, 'backups');
+const BACKUP_DIR = process.env.BACKUP_DIR
+  ? path.resolve(process.env.BACKUP_DIR)
+  : path.join(__dirname, 'backups');
 if (!fs.existsSync(BACKUP_DIR)) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
+}
+
+function getBackupCreationTime(stats) {
+  if (Number.isFinite(stats.birthtimeMs) && stats.birthtimeMs > 0) {
+    return stats.birthtime;
+  }
+  return stats.ctime;
+}
+
+function formatLocalBackupTimestamp(date) {
+  const pad = value => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    + `_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+function createBackupFileName(type, now) {
+  const baseName = `test_platform_backup_${formatLocalBackupTimestamp(now)}`;
+  let fileName = `${baseName}_${type}.db`;
+  let sequence = 2;
+
+  while (fs.existsSync(path.join(BACKUP_DIR, fileName))) {
+    fileName = `${baseName}_${sequence}_${type}.db`;
+    sequence += 1;
+  }
+
+  return fileName;
 }
 
 function getSafeBackupPath(filename) {
@@ -603,12 +631,13 @@ function getSafeBackupPath(filename) {
 
 // Perform a backup
 function performBackup(type = 'auto') {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '').replace('T', '_').slice(0, 15);
-  const fileName = `test_platform_backup_${timestamp}_${type}.db`;
+  const now = new Date();
+  const fileName = createBackupFileName(type, now);
   const destPath = path.join(BACKUP_DIR, fileName);
   
   try {
     fs.copyFileSync(path.join(__dirname, 'testcases.db'), destPath);
+    fs.utimesSync(destPath, now, now);
     console.log(`[Backup] Successfully created ${fileName}`);
     cleanOldBackups();
     return { success: true, fileName };
@@ -625,7 +654,7 @@ function cleanOldBackups() {
       .filter(f => f.endsWith('.db'))
       .map(f => ({
         name: f,
-        time: fs.statSync(path.join(BACKUP_DIR, f)).mtime.getTime()
+        time: getBackupCreationTime(fs.statSync(path.join(BACKUP_DIR, f))).getTime()
       }))
       .sort((a, b) => b.time - a.time); // newest first
 
@@ -641,11 +670,40 @@ function cleanOldBackups() {
   }
 }
 
-// Schedule daily backup at 02:00
-cron.schedule('0 2 * * *', () => {
-  console.log('[Backup] Running scheduled daily backup...');
+function hasAutomaticBackupForDate(date) {
+  const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const nextDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+
+  return fs.readdirSync(BACKUP_DIR)
+    .filter(file => /_auto\.db$/i.test(file))
+    .some(file => {
+      const createdAt = getBackupCreationTime(fs.statSync(path.join(BACKUP_DIR, file)));
+      return createdAt >= dayStart && createdAt < nextDay;
+    });
+}
+
+function runDailyAutomaticBackup(reason) {
+  const now = new Date();
+  if (hasAutomaticBackupForDate(now)) {
+    console.log(`[Backup] Daily automatic backup already exists; skipped ${reason} run.`);
+    return;
+  }
+
+  console.log(`[Backup] Running ${reason} daily backup...`);
   performBackup('auto');
+}
+
+// Schedule daily backup at 02:00 in the server's local timezone.
+const BACKUP_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+cron.schedule('0 2 * * *', () => runDailyAutomaticBackup('scheduled'), {
+  timezone: BACKUP_TIMEZONE
 });
+console.log(`[Backup] Daily backup scheduled for 02:00 (${BACKUP_TIMEZONE}).`);
+
+// If the server was offline at 02:00, create today's backup when it starts later.
+if (new Date().getHours() >= 2) {
+  runDailyAutomaticBackup('startup catch-up');
+}
 
 // GET /api/backups - List backups
 app.get('/api/backups', (req, res) => {
@@ -657,7 +715,7 @@ app.get('/api/backups', (req, res) => {
         return {
           name: f,
           size: stats.size,
-          createdAt: stats.mtime
+          createdAt: getBackupCreationTime(stats)
         };
       })
       .sort((a, b) => b.createdAt - a.createdAt);

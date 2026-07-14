@@ -1,3 +1,5 @@
 import { startApp } from "./js/app.js";
 
-startApp();
+startApp().catch(error => {
+  console.error("Failed to start application:", error);
+});

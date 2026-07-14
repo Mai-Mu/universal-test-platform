@@ -78,3 +78,11 @@ export function renderDashboard(ctx) {
     dashboardModuleList.appendChild(item);
   });
 }
+
+export function setupDashboardEvents(ctx) {
+  ctx.els.statCards.forEach(card => {
+    card.addEventListener("click", () => {
+      ctx.openProjectCases(card.getAttribute("data-project-status"));
+    });
+  });
+}

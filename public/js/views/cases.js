@@ -23,7 +23,13 @@ export function renderModuleCases(ctx) {
   }
 
   filteredCases.forEach(testCase => {
-    casesListContainer.appendChild(createCaseCard(ctx, testCase));
+    casesListContainer.appendChild(createCaseCard(ctx, testCase, {
+      onStatusChanged: ({ previousStatus, status }) => {
+        if (state.currentFilter !== "all" && previousStatus !== status) {
+          renderModuleCases(ctx);
+        }
+      }
+    }));
   });
 
   initializeCaseSortable();
@@ -48,7 +54,7 @@ function createEmptyCasesMessage() {
   return emptyDiv;
 }
 
-function createCaseCard(ctx, testCase) {
+export function createCaseCard(ctx, testCase, options = {}) {
   const card = document.createElement("div");
   card.className = "case-card";
   card.id = `case-card-${testCase.id}`;
@@ -120,9 +126,11 @@ function createCaseCard(ctx, testCase) {
     card.classList.toggle("expanded");
   });
 
-  card.querySelectorAll(".btn-status-set").forEach(button => {
-    button.addEventListener("click", () => {
+  const statusButtons = card.querySelectorAll(".btn-status-set");
+  statusButtons.forEach(button => {
+    button.addEventListener("click", async () => {
       const newStatus = button.getAttribute("data-status");
+      const previousStatus = testCase.status;
       if (testCase.status === newStatus && newStatus !== "untested") {
         card.classList.remove("expanded");
         const nextCard = card.nextElementSibling;
@@ -132,7 +140,19 @@ function createCaseCard(ctx, testCase) {
         }
       }
 
-      updateCaseStatus(testCase.id, newStatus);
+      statusButtons.forEach(item => {
+        item.disabled = true;
+      });
+      const updated = await updateCaseStatus(testCase.id, newStatus);
+      if (card.isConnected) {
+        statusButtons.forEach(item => {
+          item.disabled = false;
+        });
+      }
+
+      if (updated && typeof options.onStatusChanged === "function") {
+        options.onStatusChanged({ caseId: testCase.id, previousStatus, status: newStatus });
+      }
     });
   });
 
@@ -181,8 +201,9 @@ function initializeCaseSortable() {
 
 async function updateCaseStatus(caseId, status) {
   const index = state.testCases.findIndex(testCase => testCase.id === caseId);
-  if (index === -1) return;
+  if (index === -1) return false;
 
+  const previousStatus = state.testCases[index].status;
   state.testCases[index].status = status;
   updateSidebarBadges();
   updateCaseStatusUI(caseId, status);
@@ -194,8 +215,14 @@ async function updateCaseStatus(caseId, status) {
       body: JSON.stringify({ id: caseId, status })
     });
     if (!response.ok) throw new Error("HTTP status update sync failed");
+    return true;
   } catch (error) {
+    state.testCases[index].status = previousStatus;
+    updateSidebarBadges();
+    updateCaseStatusUI(caseId, previousStatus);
     console.error("Error syncing status update with database: ", error);
+    await ui.alert("状态保存失败，已恢复原状态，请稍后重试。");
+    return false;
   }
 }
 

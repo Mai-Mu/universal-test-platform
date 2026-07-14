@@ -6,11 +6,17 @@ export async function loadProjects(ctx) {
   try {
     const response = await apiFetch("/api/projects");
     if (response.ok) {
-      renderProjects(ctx, await response.json());
+      const projects = await response.json();
+      state.projects = projects;
+      renderProjects(ctx, projects);
+      return projects;
     }
   } catch (error) {
     console.error("Failed to load projects", error);
   }
+
+  state.projects = [];
+  return [];
 }
 
 function renderProjects(ctx, projects) {
@@ -80,10 +86,7 @@ export function setupHomeEvents(ctx) {
 
   if (btnBackHome) {
     btnBackHome.addEventListener("click", () => {
-      state.currentProjectId = null;
-      ctx.els.workspaceView.style.display = "none";
-      ctx.els.homeView.style.display = "flex";
-      ctx.loadProjects();
+      ctx.goHome();
     });
   }
 }

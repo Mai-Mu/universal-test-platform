@@ -18,14 +18,6 @@ export function renderInlineMarkdown(text) {
     .replace(/`(.*?)`/g, '<code class="inline-code">$1</code>');
 }
 
-export function csvCell(value) {
-  let text = String(value ?? "");
-  if (/^[=+\-@]/.test(text)) {
-    text = `'${text}`;
-  }
-  return `"${text.replace(/"/g, '""')}"`;
-}
-
 export function downloadText(filename, content, mimeType) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -35,5 +27,5 @@ export function downloadText(filename, content, mimeType) {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }

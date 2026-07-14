@@ -1,9 +1,13 @@
 export const state = {
+  projects: [],
   testCases: [],
   folders: [],
   collapsedFolders: new Set(),
+  projectCollapsedFolders: new Set(),
+  currentView: "home",
   currentModuleId: null,
   currentFilter: "all",
+  currentProjectFilter: "all",
   notesDebounceTimer: null,
   currentProjectId: null,
   currentProjectName: "测试总览"
