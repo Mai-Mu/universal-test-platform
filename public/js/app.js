@@ -8,6 +8,7 @@ import { renderDashboard, setupDashboardEvents } from "./views/dashboard.js";
 import { setupHomeEvents, loadProjects } from "./views/home.js";
 import { setupReportExportEvents } from "./views/reportExport.js";
 import { renderProjectCases, setupProjectCaseEvents } from "./views/projectCases.js";
+import { renderProjectDocs } from "./views/projectDocs.js";
 import { renderSidebarModules, setupSidebarEvents } from "./views/sidebar.js";
 import { ui } from "./ui.js";
 
@@ -113,7 +114,8 @@ function switchView(ctx, moduleId, options = {}) {
   closeMobileSidebar(ctx);
   const isModule = Number.isSafeInteger(moduleId) && moduleId > 0;
   const isBackup = moduleId === "backup";
-  state.currentView = isBackup ? "backup" : isModule ? "module" : "dashboard";
+  const isProjectDocs = moduleId === "project-docs";
+  state.currentView = isBackup ? "backup" : isProjectDocs ? "project-docs" : isModule ? "module" : "dashboard";
   state.currentModuleId = isModule ? moduleId : null;
 
   writeBrowserRoute({
@@ -128,6 +130,7 @@ function switchView(ctx, moduleId, options = {}) {
   });
 
   ctx.els.viewDashboard.style.display = "none";
+  ctx.els.viewProjectDocs.style.display = "none";
   ctx.els.viewProjectCases.style.display = "none";
   ctx.els.viewModuleCases.style.display = "none";
   ctx.els.viewBackup.style.display = "none";
@@ -150,6 +153,17 @@ function switchView(ctx, moduleId, options = {}) {
     if (ctx.els.btnResetModule) ctx.els.btnResetModule.style.display = "none";
     setDocumentTitle(`${state.currentProjectName} · 备份管理`);
     loadBackups(ctx);
+    return;
+  }
+
+  if (state.currentView === "project-docs") {
+    ctx.els.navProjectDocs.classList.add("active");
+    ctx.els.viewProjectDocs.style.display = "block";
+    ctx.els.pageTitle.textContent = "项目说明";
+    if (ctx.els.btnEditProject) ctx.els.btnEditProject.style.display = "none";
+    if (ctx.els.btnResetModule) ctx.els.btnResetModule.style.display = "none";
+    setDocumentTitle(`项目说明 · ${state.currentProjectName}`);
+    renderProjectDocs(ctx);
     return;
   }
 
@@ -190,6 +204,7 @@ function openProjectCases(ctx, filter, options = {}) {
   ctx.els.navDashboard.classList.add("active");
 
   ctx.els.viewDashboard.style.display = "none";
+  ctx.els.viewProjectDocs.style.display = "none";
   ctx.els.casesListContainer.innerHTML = "";
   ctx.els.viewModuleCases.style.display = "none";
   ctx.els.viewBackup.style.display = "none";
@@ -262,6 +277,11 @@ function applyProjectView(ctx, route, options = {}) {
     return;
   }
 
+  if (route.view === "project-docs") {
+    switchView(ctx, "project-docs", { historyMode });
+    return;
+  }
+
   if (route.view === "module") {
     const moduleExists = getModules().some(module => module.moduleId === route.moduleId);
     if (moduleExists) {
@@ -298,6 +318,13 @@ function setDocumentTitle(label) {
 function setupEventListeners(ctx) {
   ctx.els.navDashboard.addEventListener("click", () => {
     ctx.switchView(null);
+  });
+  ctx.els.navProjectDocs.addEventListener("click", () => {
+    ctx.switchView("project-docs");
+  });
+  ctx.els.brandHomeLink.addEventListener("click", event => {
+    event.preventDefault();
+    ctx.goHome();
   });
 
   setupBackupEvents(ctx);

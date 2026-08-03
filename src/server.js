@@ -3,27 +3,34 @@ const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 const fs = require('fs');
 const cron = require('node-cron');
+const { ensurePlatformSchema } = require('./lib/platform-db.cjs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const DATA_DIR = path.resolve(process.env.TEST_PLATFORM_DATA_DIR || path.join(PROJECT_ROOT, 'data'));
+const DB_PATH = path.join(DATA_DIR, 'testcases.db');
+const PUBLIC_DIR = path.join(PROJECT_ROOT, 'public');
+fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // Enable JSON middleware
 app.use(express.json());
 
 // Initialize SQLite database
-let db = new DatabaseSync(path.join(__dirname, 'testcases.db'));
+let db = new DatabaseSync(DB_PATH);
 
 function closeDb() {
   if (db) db.close();
 }
 
 function reopenDb() {
-  db = new DatabaseSync(path.join(__dirname, 'testcases.db'));
-  db.exec('PRAGMA foreign_keys = ON');
+  db = new DatabaseSync(DB_PATH);
+  ensurePlatformSchema(db);
 }
 
 // Enable foreign keys
 db.exec('PRAGMA foreign_keys = ON');
+ensurePlatformSchema(db);
 
 // Add projects table
 db.exec(`
@@ -34,6 +41,21 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `);
+
+// Project-level notes imported alongside test cases, kept as ordered Markdown sections.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS project_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+  )
+`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_project_documents_project_order ON project_documents(project_id, sort_order, id)');
 
 // Add default project
 try {
@@ -49,8 +71,8 @@ try {
 // Create test cases table
 db.exec(`
   CREATE TABLE IF NOT EXISTS test_cases (
-    id TEXT PRIMARY KEY,
-    project_id INTEGER DEFAULT 1,
+    project_id INTEGER NOT NULL DEFAULT 1,
+    id TEXT NOT NULL,
     module_id INTEGER NOT NULL,
     module_name TEXT NOT NULL,
     bg_info TEXT,
@@ -60,7 +82,9 @@ db.exec(`
     expected TEXT NOT NULL,   -- Stored as JSON stringified array
     status TEXT DEFAULT 'untested',
     notes TEXT DEFAULT '',
-    sort_order INTEGER DEFAULT 0
+    sort_order INTEGER DEFAULT 0,
+    PRIMARY KEY (project_id, id),
+    FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
   )
 `);
 
@@ -350,6 +374,64 @@ app.post('/api/projects', (req, res) => {
   }
 });
 
+app.get('/api/project-documents', (req, res) => {
+  const projectId = Number(req.query.projectId || 1);
+  if (!Number.isSafeInteger(projectId) || projectId <= 0) {
+    return res.status(400).json({ error: 'A valid projectId is required' });
+  }
+
+  try {
+    const rows = db.prepare(`
+      SELECT id, project_id AS projectId, title, content, sort_order AS sortOrder,
+             created_at AS createdAt, updated_at AS updatedAt
+      FROM project_documents
+      WHERE project_id = ?
+      ORDER BY sort_order, id
+    `).all(projectId);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to retrieve project documents' });
+  }
+});
+
+app.put('/api/project-documents', (req, res) => {
+  const projectId = Number(req.body.projectId);
+  const sections = req.body.sections;
+  if (!Number.isSafeInteger(projectId) || projectId <= 0 || !Array.isArray(sections)) {
+    return res.status(400).json({ error: 'A valid projectId and sections array are required' });
+  }
+
+  const normalized = sections.map((section, index) => ({
+    title: String(section?.title || '').trim(),
+    content: String(section?.content || '').trim(),
+    sortOrder: Number.isSafeInteger(section?.sortOrder) ? section.sortOrder : index
+  }));
+  if (normalized.some(section => !section.title)) {
+    return res.status(400).json({ error: 'Every document section requires a title' });
+  }
+
+  try {
+    if (!db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    db.exec('BEGIN IMMEDIATE');
+    db.prepare('DELETE FROM project_documents WHERE project_id = ?').run(projectId);
+    const insert = db.prepare(`
+      INSERT INTO project_documents (project_id, title, content, sort_order)
+      VALUES (?, ?, ?, ?)
+    `);
+    normalized.forEach(section => insert.run(projectId, section.title, section.content, section.sortOrder));
+    db.exec('COMMIT');
+    res.json({ success: true, count: normalized.length });
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch (rollbackError) {}
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update project documents' });
+  }
+});
+
 // 1. Get all test cases (with folder association)
 app.get('/api/testcases', (req, res) => {
   const projectId = req.query.projectId || 1;
@@ -389,14 +471,14 @@ app.get('/api/testcases', (req, res) => {
 
 // 2. Update test case status
 app.post('/api/testcases/status', (req, res) => {
-  const { id, status } = req.body;
+  const { id, status, projectId = 1 } = req.body;
   if (!id || !status) {
     return res.status(400).json({ error: 'Missing required parameters: id and status' });
   }
   
   try {
-    const stmt = db.prepare('UPDATE test_cases SET status = ? WHERE id = ?');
-    const result = stmt.run(status, id);
+    const stmt = db.prepare('UPDATE test_cases SET status = ? WHERE project_id = ? AND id = ?');
+    const result = stmt.run(status, projectId, id);
     
     if (result.changes === 0) {
       return res.status(404).json({ error: `Test case with ID ${id} not found` });
@@ -411,14 +493,14 @@ app.post('/api/testcases/status', (req, res) => {
 
 // 3. Update test case notes
 app.post('/api/testcases/notes', (req, res) => {
-  const { id, notes } = req.body;
+  const { id, notes, projectId = 1 } = req.body;
   if (!id) {
     return res.status(400).json({ error: 'Missing required parameter: id' });
   }
   
   try {
-    const stmt = db.prepare('UPDATE test_cases SET notes = ? WHERE id = ?');
-    const result = stmt.run(notes || '', id);
+    const stmt = db.prepare('UPDATE test_cases SET notes = ? WHERE project_id = ? AND id = ?');
+    const result = stmt.run(notes || '', projectId, id);
     
     if (result.changes === 0) {
       return res.status(404).json({ error: `Test case with ID ${id} not found` });
@@ -454,15 +536,15 @@ app.post('/api/testcases/reset', (req, res) => {
 
 // 4.5. Reorder test cases within a module
 app.post('/api/testcases/reorder', (req, res) => {
-  const { ids } = req.body;
+  const { ids, projectId = 1 } = req.body;
   if (!ids || !Array.isArray(ids)) {
     return res.status(400).json({ error: 'Missing required parameter: ids (array)' });
   }
   
   try {
-    const stmt = db.prepare('UPDATE test_cases SET sort_order = ? WHERE id = ?');
+    const stmt = db.prepare('UPDATE test_cases SET sort_order = ? WHERE project_id = ? AND id = ?');
     ids.forEach((id, index) => {
-      stmt.run(index, id);
+      stmt.run(index, projectId, id);
     });
     res.json({ success: true, message: 'Test cases reordered successfully.' });
   } catch (err) {
@@ -581,9 +663,9 @@ app.post('/api/modules/reorder', (req, res) => {
 
 // --- Backup & Restore System ---
 
-const BACKUP_DIR = process.env.BACKUP_DIR
-  ? path.resolve(process.env.BACKUP_DIR)
-  : path.join(__dirname, 'backups');
+const BACKUP_DIR = process.env.TEST_PLATFORM_BACKUP_DIR || process.env.BACKUP_DIR
+  ? path.resolve(process.env.TEST_PLATFORM_BACKUP_DIR || process.env.BACKUP_DIR)
+  : path.join(DATA_DIR, 'backups');
 if (!fs.existsSync(BACKUP_DIR)) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
 }
@@ -636,7 +718,7 @@ function performBackup(type = 'auto') {
   const destPath = path.join(BACKUP_DIR, fileName);
   
   try {
-    fs.copyFileSync(path.join(__dirname, 'testcases.db'), destPath);
+    fs.copyFileSync(DB_PATH, destPath);
     fs.utimesSync(destPath, now, now);
     console.log(`[Backup] Successfully created ${fileName}`);
     cleanOldBackups();
@@ -790,7 +872,7 @@ app.post('/api/backups/restore', (req, res) => {
     closeDb();
     
     // 3. Overwrite the file
-    fs.copyFileSync(backupPath, path.join(__dirname, 'testcases.db'));
+    fs.copyFileSync(backupPath, DB_PATH);
     
     // 4. Reconnect
     reopenDb();
@@ -806,11 +888,11 @@ app.post('/api/backups/restore', (req, res) => {
 });
 
 // Serve static frontend assets
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(PUBLIC_DIR));
 
 // Default fallback
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
 // Start listening

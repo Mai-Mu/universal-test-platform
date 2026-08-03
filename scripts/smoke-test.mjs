@@ -8,11 +8,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 const rootFilesToCheck = [
-  'server.js',
+  'src/server.js',
   'public/app.js',
   'public/js/router.mjs',
   'public/js/reportBuilder.mjs',
-  'mcp-server.mjs'
+  'src/mcp-server.mjs'
 ];
 
 async function collectJsFiles(dir) {
@@ -83,6 +83,11 @@ assert.deepEqual(parseAppRoute('/projects/7', '?view=cases&status=failed'), {
   view: 'project-cases',
   filter: 'failed'
 });
+assert.deepEqual(parseAppRoute('/projects/7', '?view=docs'), {
+  page: 'project',
+  projectId: 7,
+  view: 'project-docs'
+});
 assert.deepEqual(parseAppRoute('/projects/7/backups', ''), {
   page: 'project',
   projectId: 7,
@@ -95,6 +100,7 @@ assert.equal(
   '/projects/7?view=cases&status=failed'
 );
 assert.equal(buildAppUrl({ page: 'project', projectId: 7, view: 'backup' }), '/projects/7/backups');
+assert.equal(buildAppUrl({ page: 'project', projectId: 7, view: 'project-docs' }), '/projects/7?view=docs');
 
 const reportBuilderUrl = pathToFileURL(path.resolve('public/js/reportBuilder.mjs')).href;
 const { buildStandaloneReport } = await import(reportBuilderUrl);
@@ -125,10 +131,16 @@ if (/<(?:script|link|img)[^>]+(?:src|href)=["']https?:/i.test(sampleReport)) {
 }
 
 const port = String(31000 + Math.floor(Math.random() * 1000));
-const smokeBackupDir = await mkdtemp(path.join(tmpdir(), 'test-platform-backups-'));
-const server = spawn(process.execPath, ['server.js'], {
+const smokeDataDir = await mkdtemp(path.join(tmpdir(), 'test-platform-web-'));
+const smokeBackupDir = path.join(smokeDataDir, 'backups');
+const server = spawn(process.execPath, ['src/server.js'], {
   cwd: process.cwd(),
-  env: { ...process.env, PORT: port, BACKUP_DIR: smokeBackupDir },
+  env: {
+    ...process.env,
+    PORT: port,
+    TEST_PLATFORM_DATA_DIR: smokeDataDir,
+    TEST_PLATFORM_BACKUP_DIR: smokeBackupDir
+  },
   stdio: ['ignore', 'pipe', 'pipe']
 });
 
@@ -146,6 +158,7 @@ try {
   const projects = await waitForJson(`${baseUrl}/api/projects`);
   const cases = await waitForJson(`${baseUrl}/api/testcases?projectId=1`);
   const folders = await waitForJson(`${baseUrl}/api/folders?projectId=1`);
+  const projectDocuments = await waitForJson(`${baseUrl}/api/project-documents?projectId=1`);
   const projectPage = await fetch(`${baseUrl}/projects/1`);
   const backupPage = await fetch(`${baseUrl}/projects/1/backups`);
   const projectPageHtml = await projectPage.text();
@@ -169,6 +182,9 @@ try {
   }
   if (!Array.isArray(folders)) {
     throw new Error('Expected an array from /api/folders');
+  }
+  if (!Array.isArray(projectDocuments)) {
+    throw new Error('Expected an array from /api/project-documents');
   }
   if (!projectPage.ok || !projectPageHtml.includes('id="workspace-view"')) {
     throw new Error('Expected /projects/1 to return the frontend application');
@@ -206,5 +222,5 @@ try {
     server.kill();
     await Promise.race([once(server, 'exit'), delay(2000)]);
   }
-  await rm(smokeBackupDir, { recursive: true, force: true });
+  await rm(smokeDataDir, { recursive: true, force: true });
 }

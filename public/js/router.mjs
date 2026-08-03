@@ -32,6 +32,14 @@ export function parseAppRoute(pathname = "/", search = "") {
   if (projectId === null) return { page: "not-found" };
   const params = new URLSearchParams(search);
 
+  if (params.get("view") === "docs") {
+    return {
+      page: "project",
+      projectId,
+      view: "project-docs"
+    };
+  }
+
   if (params.get("view") === "cases") {
     return {
       page: "project",
@@ -66,6 +74,7 @@ export function buildAppUrl(route) {
 
   const projectPath = `/projects/${projectId}`;
   if (route.view === "backup") return `${projectPath}/backups`;
+  if (route.view === "project-docs") return `${projectPath}?view=docs`;
 
   if (route.view === "module") {
     const moduleId = parsePositiveInteger(route.moduleId);

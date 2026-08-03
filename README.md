@@ -79,19 +79,45 @@
 │       ├── reportBuilder.mjs # 单文件 HTML 报告生成器
 │       └── views/          # 页面/区域模块
 ├── scripts/                # 验证脚本
-├── server.js               # Express 服务和 SQLite API
-├── mcp-server.mjs          # MCP Agent 接口服务
-├── testcases.db            # 本地 SQLite 数据库文件（运行时生成/维护）
-├── backups/                # 数据库备份目录（运行时生成/维护）
+├── src/                    # 后端与 Agent 源码
+│   ├── server.js           # Express 服务和 SQLite API
+│   ├── mcp-server.mjs      # MCP Agent 接口服务
+│   └── lib/                # 数据库迁移与结构化导入逻辑
+├── data/                   # 本地运行数据，不纳入版本控制
+│   ├── testcases.db        # SQLite 数据库
+│   └── backups/            # 自动、手动与 MCP 导入备份
 └── package.json            # Node.js 项目配置
 ```
 
 ## 数据与版本控制建议
 
-`testcases.db` 和 `backups/` 属于本地运行数据，通常不建议提交到代码仓库。团队需要迁移或恢复完整数据时，应使用数据库备份文件或独立数据同步流程；HTML 报告适合评审和归档，不用于恢复测试进度，也不包含执行备注与用例正文。
+`data/` 属于本地运行数据，不提交到代码仓库。团队需要迁移或恢复完整数据时，应使用数据库备份文件或独立数据同步流程；HTML 报告适合评审和归档，不用于恢复测试进度，也不包含执行备注与用例正文。
 
 系统默认按服务器本地时间每天 `02:00` 自动备份，并保留最近 30 份备份。若服务在 `02:00` 时未运行，当天稍后启动时会检查并补做一次；备份目录可通过 `BACKUP_DIR` 环境变量调整。
 
 ## 关于 MCP Server
 
-项目预留了 `mcp-server.mjs`，用于让支持 MCP 的 AI Agent 读取平台上下文或批量写入测试用例。当前 MCP 接口适合作为扩展入口，后续可以继续补充查询、统计、生成报告等工具能力。
+项目通过 `src/mcp-server.mjs` 让 Codex 等支持 MCP 的 Agent 直接向平台提交结构化测试资产，不再依赖人工整理 Markdown 和二次导入。MCP 与 Web 服务共用 SQLite 数据库，支持项目说明、目录、模块、用例和导入审计。
+
+### MCP 工具
+
+- `list_test_projects`：列出项目及用例、模块数量。
+- `get_test_project`：读取项目说明、目录、模块、用例和当前执行状态。
+- `validate_test_package`：只做结构、重复编号和目标项目预检，不写数据库。
+- `import_test_package`：自动备份后，以事务正式导入测试包。
+- `get_import_result`：查询导入批次、来源、备份文件、统计或失败原因。
+
+### 导入模式
+
+- `create`：新建项目，项目重名时停止，不覆盖已有项目。
+- `append`：向现有项目追加内容，发现已有用例编号时停止。
+- `upsert`：按项目内用例编号新增或更新；更新正文时保留测试状态和备注。
+
+推荐让 Agent 先调用 `list_test_projects` 确认目标，再调用 `validate_test_package`。预检没有 `errors` 后才调用 `import_test_package`。用例步骤使用 `{ action, expected }` 成对传递，防止操作和预期结果错位；范围、介绍、注意事项和验收口径放入 `documents`，平台会显示在“项目说明”页面。
+
+测试命令：
+
+```powershell
+npm test       # Web 与 MCP 完整回归
+npm run test:mcp
+```

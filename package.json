@@ -2,10 +2,12 @@
   "name": "universal-test-platform",
   "version": "1.0.0",
   "description": "Universal test case management platform with SQLite backend",
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node server.js",
-    "test": "node scripts/smoke-test.mjs"
+    "start": "node src/server.js",
+    "test": "node scripts/smoke-test.mjs && node scripts/mcp-smoke-test.mjs",
+    "test:web": "node scripts/smoke-test.mjs",
+    "test:mcp": "node scripts/mcp-smoke-test.mjs"
   },
   "keywords": [
     "testing",

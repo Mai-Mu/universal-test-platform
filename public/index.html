@@ -33,8 +33,10 @@
     <!-- Sidebar Navigation -->
     <aside class="sidebar" id="workspace-sidebar">
       <div class="sidebar-header">
-        <div class="logo-icon">T</div>
-        <div class="logo-text">Test<span>Hub</span></div>
+        <a class="brand-home-link" id="brand-home-link" href="/" aria-label="返回测试空间大厅" title="返回测试空间大厅">
+          <div class="logo-icon">T</div>
+          <div class="logo-text">Test<span>Hub</span></div>
+        </a>
         <button type="button" class="sidebar-close" id="btn-close-sidebar" aria-label="关闭测试模块导航" title="关闭导航">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M18 6L6 18"></path>
@@ -44,16 +46,18 @@
       </div>
       
       <nav class="sidebar-menu" id="sidebar-menu">
-        <button id="btn-back-home" style="background: none; border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-secondary); padding: 6px 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 0.85rem; margin-bottom: 12px; transition: var(--transition-fast);">
-          <span>←</span> 返回大厅
-        </button>
-        
         <div class="menu-section-title">当前项目测试空间</div>
         
         <a class="menu-item active" data-view="dashboard" id="nav-dashboard">
           <span class="menu-item-left">
             <span class="menu-item-icon">📊</span>
             <span>测试概览</span>
+          </span>
+        </a>
+        <a class="menu-item" data-view="project-docs" id="nav-project-docs">
+          <span class="menu-item-left">
+            <span class="menu-item-icon">📄</span>
+            <span>项目说明</span>
           </span>
         </a>
         
@@ -210,6 +214,21 @@
             </div>
           </div>
           
+        </section>
+
+        <section class="view-panel" id="view-project-docs" data-testid="project-docs-view">
+          <div class="project-docs-shell">
+            <div class="project-docs-intro">
+              <span class="project-docs-kicker">PROJECT NOTES</span>
+              <h2>项目说明</h2>
+              <p>集中查看测试范围、执行约定、注意事项和回归口径。</p>
+            </div>
+            <div class="project-docs-empty" id="project-docs-empty" hidden>
+              <strong>暂无项目说明</strong>
+              <span>后续导入测试资料时，说明性内容会整理到这里。</span>
+            </div>
+            <div class="project-docs-list" id="project-docs-list"></div>
+          </div>
         </section>
 
         <!-- ==========================================
