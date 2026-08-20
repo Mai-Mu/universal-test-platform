@@ -50,6 +50,12 @@
    npm test
    ```
 
+## Docker 公网部署
+
+仓库提供 `Dockerfile`、`docker-compose.yml` 和 Caddy 配置，可在 Linux 云服务器上以单实例方式运行。Caddy 负责自动 HTTPS 和统一用户名密码认证，应用端口不会直接暴露到公网，SQLite 数据保存在宿主机 `data/` 目录。
+
+Ubuntu 24.04 的完整部署、现有数据库迁移、DNS、阿里云安全组、密码生成、构建、验证、升级和回滚步骤，请参阅 [Docker 部署教程](docs/docker-deployment-ubuntu.md)。
+
 ## 页面地址
 
 - `/`：测试空间大厅。

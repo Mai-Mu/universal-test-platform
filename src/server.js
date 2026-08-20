@@ -733,7 +733,8 @@ function performBackup(type = 'auto') {
   const destPath = path.join(BACKUP_DIR, fileName);
   
   try {
-    fs.copyFileSync(DB_PATH, destPath);
+    const escapedPath = destPath.replaceAll("'", "''");
+    db.exec(`VACUUM INTO '${escapedPath}'`);
     fs.utimesSync(destPath, now, now);
     console.log(`[Backup] Successfully created ${fileName}`);
     cleanOldBackups();
@@ -910,7 +911,34 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
-// Start listening
-app.listen(PORT, () => {
-  console.log(`Universal Test Platform running at http://localhost:${PORT}`);
+// Start listening on all container/network interfaces.
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Universal Test Platform running on port ${PORT}`);
 });
+
+let shutdownStarted = false;
+function shutdown(signal) {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  console.log(`[Shutdown] Received ${signal}; closing HTTP server and database...`);
+
+  const forceExitTimer = setTimeout(() => {
+    console.error('[Shutdown] Graceful shutdown timed out.');
+    process.exit(1);
+  }, 10000);
+  forceExitTimer.unref();
+
+  server.close(() => {
+    try {
+      closeDb();
+      console.log('[Shutdown] Complete.');
+      process.exit(0);
+    } catch (error) {
+      console.error('[Shutdown] Failed to close database:', error);
+      process.exit(1);
+    }
+  });
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

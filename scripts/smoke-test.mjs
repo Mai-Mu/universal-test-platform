@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 
 const rootFilesToCheck = [
   'src/server.js',
@@ -212,6 +213,12 @@ try {
 
   const listedCreatedAt = new Date(listedBackup.createdAt).getTime();
   const backupStats = await stat(path.join(smokeBackupDir, backupResult.fileName));
+  const backupDb = new DatabaseSync(path.join(smokeBackupDir, backupResult.fileName), { readOnly: true });
+  const backupIntegrity = backupDb.prepare('PRAGMA integrity_check').get().integrity_check;
+  backupDb.close();
+  if (backupIntegrity !== 'ok') {
+    throw new Error(`Expected backup database integrity_check to be ok, received: ${backupIntegrity}`);
+  }
   if (Math.abs(listedCreatedAt - backupStartedAt) > 15000
     || Math.abs(backupStats.mtimeMs - backupStartedAt) > 15000) {
     throw new Error('Expected backup creation timestamps to match the actual creation time');
