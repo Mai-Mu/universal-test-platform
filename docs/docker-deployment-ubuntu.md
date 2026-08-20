@@ -95,15 +95,37 @@ docker compose version
 docker run --rm hello-world
 ```
 
+如果中国内地服务器访问 `registry-1.docker.io` 超时，请在阿里云容器镜像服务 ACR 的“镜像工具 → 镜像加速器”页面取得当前账号的专属地址，然后创建 `/etc/docker/daemon.json`：
+
+```json
+{
+  "registry-mirrors": [
+    "https://你的专属编号.mirror.aliyuncs.com"
+  ]
+}
+```
+
+保存后验证并重启 Docker：
+
+```bash
+python3 -m json.tool /etc/docker/daemon.json
+dockerd --validate --config-file=/etc/docker/daemon.json
+systemctl restart docker
+docker info | sed -n '/Registry Mirrors/,+3p'
+docker run --rm hello-world
+```
+
+不要使用来源不明的公共镜像站，也不要把专属地址替换成示例占位值后直接执行。
+
 ## 五、拉取项目代码
 
 仓库是公开仓库，不需要 GitHub 凭据：
 
 ```bash
-mkdir -p /opt
-cd /opt
+mkdir -p /data
+cd /data
 git clone https://github.com/Mai-Mu/universal-test-platform.git
-cd /opt/universal-test-platform
+cd /data/universal-test-platform
 git status
 git log -1 --oneline
 ```
@@ -115,19 +137,19 @@ git log -1 --oneline
 先在服务器创建目录：
 
 ```bash
-mkdir -p /opt/universal-test-platform/data/backups
+mkdir -p /data/universal-test-platform/data/backups
 ```
 
 在 Windows 电脑的 PowerShell 中执行上传。使用本项目生成并校验过的部署快照，不要上传仓库根目录那个 0 字节的 `testcases.db`：
 
 ```powershell
-scp "C:\Projects\tamagawa-test-case\data\deployment\testcases.db" root@SERVER_IP:/opt/universal-test-platform/data/testcases.db
+scp "C:\Projects\tamagawa-test-case\data\deployment\testcases.db" root@SERVER_IP:/data/universal-test-platform/data/testcases.db
 ```
 
 回到服务器，检查文件并把目录交给镜像内的 `node` 用户（UID 1000）：
 
 ```bash
-cd /opt/universal-test-platform
+cd /data/universal-test-platform
 ls -lh data/testcases.db
 chown -R 1000:1000 data
 chmod 750 data data/backups
@@ -139,7 +161,7 @@ chmod 640 data/testcases.db
 复制环境变量模板：
 
 ```bash
-cd /opt/universal-test-platform
+cd /data/universal-test-platform
 cp .env.example .env
 ```
 
@@ -198,7 +220,7 @@ sed -n '1,200p' Dockerfile
 ## 九、由你亲自构建镜像
 
 ```bash
-cd /opt/universal-test-platform
+cd /data/universal-test-platform
 docker compose build --pull app
 docker compose images
 ```
@@ -257,7 +279,7 @@ docker compose logs --tail=100
 查看状态：
 
 ```bash
-cd /opt/universal-test-platform
+cd /data/universal-test-platform
 docker compose ps
 ```
 
@@ -287,7 +309,7 @@ docker compose restart
 更新前先创建数据库备份，并确认 Git 工作区干净：
 
 ```bash
-cd /opt/universal-test-platform
+cd /data/universal-test-platform
 git status
 git pull --ff-only origin main
 docker compose build --pull app
@@ -350,7 +372,7 @@ ls -ld data data/backups
 如果日志出现 `permission denied`，重新执行：
 
 ```bash
-chown -R 1000:1000 /opt/universal-test-platform/data
+chown -R 1000:1000 /data/universal-test-platform/data
 docker compose restart app
 ```
 
