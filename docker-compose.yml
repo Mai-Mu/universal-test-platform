@@ -29,7 +29,7 @@ services:
         max-file: "3"
 
   caddy:
-    image: caddy:2-alpine
+    image: public.ecr.aws/docker/library/caddy:2-alpine
     depends_on:
       app:
         condition: service_healthy

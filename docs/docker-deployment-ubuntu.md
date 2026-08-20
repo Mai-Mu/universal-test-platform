@@ -117,6 +117,13 @@ docker run --rm hello-world
 
 不要使用来源不明的公共镜像站，也不要把专属地址替换成示例占位值后直接执行。
 
+如果专属加速器对某个 Docker Official Image 返回 `not found`，本项目已经将 Node 和 Caddy 基础镜像指向 AWS Public ECR 中的 Docker Official Images 同步库。该仓库支持匿名拉取，不需要 AWS 账号：
+
+```bash
+docker pull public.ecr.aws/docker/library/node:24-bookworm-slim
+docker pull public.ecr.aws/docker/library/caddy:2-alpine
+```
+
 ## 五、拉取项目代码
 
 仓库是公开仓库，不需要 GitHub 凭据：
@@ -169,7 +176,7 @@ cp .env.example .env
 
 ```bash
 read -rsp '请输入网站访问密码: ' SITE_PASSWORD; echo
-PASSWORD_HASH=$(docker run --rm caddy:2-alpine caddy hash-password --plaintext "$SITE_PASSWORD")
+PASSWORD_HASH=$(docker run --rm public.ecr.aws/docker/library/caddy:2-alpine caddy hash-password --plaintext "$SITE_PASSWORD")
 unset SITE_PASSWORD
 printf '%s\n' "$PASSWORD_HASH"
 ```
@@ -221,7 +228,7 @@ sed -n '1,200p' Dockerfile
 
 ```bash
 cd /data/universal-test-platform
-docker compose build --pull app
+docker compose --progress plain build --pull app
 docker compose images
 ```
 
