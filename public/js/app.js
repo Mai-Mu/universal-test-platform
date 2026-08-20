@@ -5,7 +5,7 @@ import { getModules, state } from "./state.js";
 import { setupBackupEvents, loadBackups } from "./views/backups.js";
 import { setupCaseEvents, renderModuleCases } from "./views/cases.js";
 import { renderDashboard, setupDashboardEvents } from "./views/dashboard.js";
-import { setupHomeEvents, loadProjects } from "./views/home.js";
+import { setupHomeEvents, loadProjects, recordProjectVisit } from "./views/home.js";
 import { setupReportExportEvents } from "./views/reportExport.js";
 import { renderProjectCases, setupProjectCaseEvents } from "./views/projectCases.js";
 import { renderProjectDocs } from "./views/projectDocs.js";
@@ -93,6 +93,7 @@ async function openProject(ctx, projectId, projectName, options = {}) {
   };
 
   state.currentProjectId = numericProjectId;
+  recordProjectVisit(numericProjectId);
   state.currentProjectName = projectName || "测试总览";
   state.currentView = "dashboard";
   state.currentModuleId = null;
@@ -224,7 +225,7 @@ async function showHome(ctx, options = {}) {
   state.currentModuleId = null;
   state.currentProjectFilter = "all";
   ctx.els.workspaceView.style.display = "none";
-  ctx.els.homeView.style.display = "flex";
+  ctx.els.homeView.style.display = "block";
   writeBrowserRoute({ page: "home" }, options.historyMode || "push");
   setDocumentTitle();
 

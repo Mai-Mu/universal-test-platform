@@ -177,6 +177,10 @@ try {
   if (!Array.isArray(projects) || projects.length === 0) {
     throw new Error('Expected at least one project from /api/projects');
   }
+  const projectSummaryFields = ['caseCount', 'passedCount', 'failedCount', 'blockedCount', 'untestedCount'];
+  if (!projectSummaryFields.every(field => Number.isFinite(projects[0][field]))) {
+    throw new Error('Expected /api/projects to include numeric cross-project status summaries');
+  }
   if (!Array.isArray(cases)) {
     throw new Error('Expected an array from /api/testcases');
   }
@@ -188,6 +192,10 @@ try {
   }
   if (!projectPage.ok || !projectPageHtml.includes('id="workspace-view"')) {
     throw new Error('Expected /projects/1 to return the frontend application');
+  }
+  if (!projectPageHtml.includes('id="home-summary-grid"')
+    && !projectPageHtml.includes('class="home-summary-grid"')) {
+    throw new Error('Expected the frontend application to contain the home workbench summary');
   }
   if (!backupPage.ok || !backupPageHtml.includes('id="backup-view"')) {
     throw new Error('Expected /projects/1/backups to return the frontend application');

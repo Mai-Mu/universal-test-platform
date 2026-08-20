@@ -340,7 +340,22 @@ seedDatabase();
 // --- Projects Endpoints ---
 app.get('/api/projects', (req, res) => {
   try {
-    const rows = db.prepare('SELECT * FROM projects ORDER BY id ASC').all();
+    const rows = db.prepare(`
+      SELECT
+        p.id,
+        p.name,
+        p.description,
+        p.created_at,
+        COUNT(tc.id) AS caseCount,
+        COALESCE(SUM(CASE WHEN tc.status = 'passed' THEN 1 ELSE 0 END), 0) AS passedCount,
+        COALESCE(SUM(CASE WHEN tc.status = 'failed' THEN 1 ELSE 0 END), 0) AS failedCount,
+        COALESCE(SUM(CASE WHEN tc.status = 'blocked' THEN 1 ELSE 0 END), 0) AS blockedCount,
+        COALESCE(SUM(CASE WHEN tc.status = 'untested' THEN 1 ELSE 0 END), 0) AS untestedCount
+      FROM projects p
+      LEFT JOIN test_cases tc ON tc.project_id = p.id
+      GROUP BY p.id
+      ORDER BY p.id ASC
+    `).all();
     res.json(rows);
   } catch (err) {
     console.error(err);
