@@ -68,3 +68,40 @@ jobs:
 
           echo "Container did not become ready within 60 seconds." >&2
           exit 1
+
+      - name: Prepare offline deployment bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle_dir="offline-deployment"
+          mkdir -p "$bundle_dir"
+
+          docker tag "${IMAGE_NAME}:${GITHUB_SHA}" "${IMAGE_NAME}:latest"
+          docker save "${IMAGE_NAME}:latest" "${IMAGE_NAME}:${GITHUB_SHA}" \
+            | gzip -1 > "$bundle_dir/universal-test-platform-image.tar.gz"
+
+          cp docker-compose.yml "$bundle_dir/docker-compose.yml"
+          cp .env.example "$bundle_dir/env.example"
+          cp deploy/nginx-test-platform.conf.example "$bundle_dir/nginx-test-platform.conf.example"
+          cp docs/offline-deployment.md "$bundle_dir/OFFLINE-INSTALL.md"
+          printf 'commit=%s\nimage=%s\n' "$GITHUB_SHA" "$IMAGE_NAME" \
+            > "$bundle_dir/BUILD-INFO.txt"
+
+          cd "$bundle_dir"
+          sha256sum \
+            universal-test-platform-image.tar.gz \
+            docker-compose.yml \
+            env.example \
+            nginx-test-platform.conf.example \
+            OFFLINE-INSTALL.md \
+            BUILD-INFO.txt \
+            > SHA256SUMS
+
+      - name: Upload offline deployment bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: offline-deployment-${{ github.sha }}
+          path: offline-deployment/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

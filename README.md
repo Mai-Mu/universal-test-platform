@@ -56,6 +56,8 @@
 
 Ubuntu 24.04 的完整部署、现有数据库迁移、DNS、阿里云安全组、密码生成、构建、验证、升级和回滚步骤，请参阅 [Docker 部署教程](docs/docker-deployment-ubuntu.md)。
 
+服务器无法访问 GitHub 或 GHCR 时，使用 GitHub Actions 生成的完整镜像归档，参阅 [离线部署说明](docs/offline-deployment.md)。
+
 ## 页面地址
 
 - `/`：测试空间大厅。

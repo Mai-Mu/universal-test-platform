@@ -22,6 +22,8 @@ ghcr.io/mai-mu/universal-test-platform:latest
 
 服务器只拉取成品镜像，不再构建 Node.js 应用。平台的 3000 端口不会发布到宿主机或公网。
 
+如果服务器无法访问 GitHub 或 GHCR，不要在服务器反复重试构建或拉取，改用 [离线部署说明](offline-deployment.md)。
+
 ## 一、安全组和防火墙
 
 云服务器只需要对外开放：
