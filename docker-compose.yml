@@ -2,9 +2,7 @@ name: tamagawa-test-platform
 
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ${APP_IMAGE:-ghcr.io/mai-mu/universal-test-platform:latest}
     environment:
       NODE_ENV: production
       PORT: "3000"

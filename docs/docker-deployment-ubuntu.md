@@ -214,7 +214,7 @@ docker compose config --services
 docker compose config --images
 ```
 
-预期服务为 `app` 和 `caddy`。应用镜像由当前源码构建；Caddy 使用官方镜像。
+预期服务为 `app` 和 `caddy`。应用镜像由 GitHub Actions 自动构建并发布到 GitHub Container Registry；Caddy 使用官方镜像。服务器不再编译应用。
 
 查看 Dockerfile 的关键步骤：
 
@@ -224,15 +224,15 @@ sed -n '1,200p' Dockerfile
 
 其中 `FROM` 选择 Node.js 24 基础镜像，`npm ci --omit=dev` 根据锁文件安装生产依赖，`USER node` 让应用以非 root 用户运行，`HEALTHCHECK` 定期检查 API。
 
-## 九、由你亲自构建镜像
+## 九、拉取 GitHub 构建好的镜像
 
 ```bash
 cd /data/universal-test-platform
-docker compose --progress plain build --pull app
+docker compose pull
 docker compose images
 ```
 
-首次构建需要下载基础镜像和 npm 依赖，3 Mbps 网络可能需要几分钟。构建完成后检查镜像列表，不要急着删除构建缓存。
+GitHub Actions 会在 `main` 分支更新后自动构建并验证应用镜像。服务器这里只下载成品镜像，不再下载 Node.js 构建依赖。拉取完成后应看到 `ghcr.io/mai-mu/universal-test-platform` 和 Caddy 镜像。
 
 ## 十、启动服务
 
@@ -270,7 +270,7 @@ curl -I -u qzz https://test.maimu.fun
 
 1. HTTPS 锁标志正常，证书域名为 `test.maimu.fun`。
 2. 使用 `qzz` 和自设密码能够进入首页。
-3. 首页显示迁移过来的 4 个项目和 299 条用例。
+3. 首页显示的项目数和用例数与迁移前记录一致。
 4. 修改一条测试备注，刷新后仍然存在。
 5. 手动创建一份备份，列表中能下载该文件。
 
@@ -311,7 +311,7 @@ docker compose restart
 
 `docker compose down` 会删除容器和网络，但不会删除 `./data` 或命名卷。不要执行 `docker compose down -v`，因为 `-v` 会删除 Caddy 保存证书的命名卷。
 
-## 十三、更新代码并重新构建
+## 十三、更新应用
 
 更新前先创建数据库备份，并确认 Git 工作区干净：
 
@@ -319,40 +319,37 @@ docker compose restart
 cd /data/universal-test-platform
 git status
 git pull --ff-only origin main
-docker compose build --pull app
+docker compose pull
 docker compose up -d
 docker compose ps
 docker compose logs --tail=100
 ```
 
-Compose 只替换应用容器，宿主机 `data/` 中的数据库不会随镜像更新而丢失。
+Compose 只替换使用旧镜像的容器，宿主机 `data/` 中的数据库不会随镜像更新而丢失。
 
 ## 十四、回滚应用版本
 
-先查看提交历史：
+GitHub 同时为每次构建发布提交哈希标签。先在 GitHub Actions 或提交历史中取得要回滚到的完整提交哈希，然后编辑服务器上的 `.env`：
 
-```bash
-git log --oneline -10
+```dotenv
+APP_IMAGE=ghcr.io/mai-mu/universal-test-platform:完整提交哈希
 ```
 
-不要强制重置仓库。需要临时回滚时，检出明确的旧提交并重建：
+拉取该版本并重新创建应用容器：
 
 ```bash
-git switch --detach OLD_COMMIT_HASH
-docker compose build app
-docker compose up -d
+docker compose pull app
+docker compose up -d app
+docker compose ps
 ```
 
-恢复最新版：
+恢复最新版时，将 `.env` 改回：
 
-```bash
-git switch main
-git pull --ff-only origin main
-docker compose build app
-docker compose up -d
+```dotenv
+APP_IMAGE=ghcr.io/mai-mu/universal-test-platform:latest
 ```
 
-数据库结构变更可能无法仅靠回滚镜像撤销，因此版本升级前必须保留可下载的数据库备份。
+然后再次执行 `docker compose pull app && docker compose up -d app`。数据库结构变更可能无法仅靠回滚镜像撤销，因此版本升级前必须保留可下载的数据库备份。
 
 ## 十五、常见问题
 
