@@ -14,7 +14,7 @@
 解压后应包含：
 
 ```text
-universal-test-platform-image.tar.gz
+universal-test-platform-image.tar.gz（本地兜底包可能是 `.tar`）
 docker-compose.yml
 env.example
 nginx-test-platform.conf.example
@@ -58,7 +58,9 @@ sha256sum -c SHA256SUMS
 
 ```bash
 cd /data/universal-test-platform
-docker load -i universal-test-platform-image.tar.gz
+IMAGE_ARCHIVE=$(find . -maxdepth 1 -type f \( -name 'universal-test-platform-image.tar.gz' -o -name 'universal-test-platform-image.tar' \) -print -quit)
+[ -n "$IMAGE_ARCHIVE" ] || { echo '未找到 Docker 镜像归档'; exit 1; }
+docker load -i "$IMAGE_ARCHIVE"
 docker image ls ghcr.io/mai-mu/universal-test-platform
 ```
 
@@ -164,7 +166,7 @@ docker exec NGINX_CONTAINER nginx -s reload
 每次 GitHub Actions 成功后会生成新的离线包。更新时：
 
 1. 下载新离线包并校验；
-2. 执行 `docker load -i universal-test-platform-image.tar.gz`；
+2. 按“导入 Docker 镜像”一节重新执行 `docker load`；
 3. 执行 `docker compose up -d --pull never`；
 4. 检查容器健康状态和平台数据。
 
