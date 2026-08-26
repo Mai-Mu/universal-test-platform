@@ -13,6 +13,10 @@ services:
       - ./data:/app/data
     expose:
       - "3000"
+    networks:
+      proxy:
+        aliases:
+          - test-platform
     init: true
     restart: unless-stopped
     read_only: true
@@ -26,31 +30,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  caddy:
-    image: public.ecr.aws/docker/library/caddy:2-alpine
-    depends_on:
-      app:
-        condition: service_healthy
-    environment:
-      SITE_ADDRESS: ${SITE_ADDRESS:?Set SITE_ADDRESS in .env}
-      BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME:?Set BASIC_AUTH_USERNAME in .env}
-      BASIC_AUTH_HASH: ${BASIC_AUTH_HASH:?Set BASIC_AUTH_HASH in .env}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-volumes:
-  caddy_data:
-  caddy_config:
+networks:
+  proxy:
+    name: ${PROXY_NETWORK:-web}
+    external: true
